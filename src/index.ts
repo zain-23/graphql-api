@@ -1,58 +1,45 @@
+import express, { Application, Request, Response } from "express";
+
+import gql from "graphql-tag";
 import { ApolloServer } from "@apollo/server";
-import { startStandaloneServer } from "@apollo/server/standalone";
+import { expressMiddleware } from "@apollo/server/express4";
+import { readFileSync } from "fs";
+import resolvers from "./resolver/resolver";
+import { buildSubgraphSchema } from "@apollo/subgraph";
+import cors from "cors";
+import { connectDB } from "./db/db";
 
-// Scheme Defination
-const typeDefs = `#graphql
-type Book {
-    title:String
-    author:String
-    }
+const app: Application = express();
+const port: number = 3000;
 
-type Query {
-    books:[Book]
-    }
-`;
-// Dateset
-const books = [
-  {
-    title: "The Awakening",
-    author: "Kate Chopin",
-  },
-  {
-    title: "City of Glass",
-    author: "Paul Auster",
-  },
-];
-// Resolver how to fetch data
-const resolvers = {
-  Query: {
-    books: () => books,
-  },
-};
+app.use(express.json());
+app.use(cors());
 
-// Server
-const server = new ApolloServer({
-  typeDefs,
-  resolvers,
+const typeDefs = gql(
+  readFileSync("./src/schema/schema.gql", {
+    encoding: "utf-8",
+  })
+);
+
+(async () => {
+  const server = new ApolloServer({
+    schema: buildSubgraphSchema({ typeDefs, resolvers }),
+  });
+
+  await server.start();
+  app.use("/graphql", express.json(), cors(), expressMiddleware(server));
+})();
+
+app.get("/", (req: Request, res: Response) => {
+  res.send("Hello World with TypeScript!");
 });
 
-const AppoloServer = async () => {
-  try {
-    const { url } = await startStandaloneServer(server, {
-      listen: {
-        port: 4000,
-      },
+connectDB()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`Server is running on http://localhost:${port}`);
     });
-    return url;
-  } catch (error) {
-    throw new Error("Something is when intializing apollo server");
-  }
-};
-
-AppoloServer()
-  .then((res) => {
-    console.log(res);
   })
   .catch((err) => {
-    console.error("APOLLO SERVER ERROR", err);
+    console.error("DB ERROR", err);
   });
